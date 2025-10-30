@@ -3,31 +3,65 @@ name: README build
 on:
   push:
     branches:
-      - master
+      - main
   schedule:
-    - cron: '0 */15 * * *'
+    - cron: '*/15 * * * *'  # every 15 minutes (UTC)
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout current repository to Master branch
-        uses: actions/checkout@v1
-      - name: Setup NodeJs 13.x
-        uses: actions/setup-node@v1
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '13.x'
-      - name: Cache dependencies and build outputs to improve workflow execution time.
-        uses: actions/cache@v1
+          node-version: '18.x'
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
         with:
           path: node_modules
           key: ${{ runner.os }}-js-${{ hashFiles('package-lock.json') }}
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
       - name: Generate README file
         run: node index.js
-      - name: Commit and Push new README.md to the repository
-        uses: mikeal/publish-to-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Detect if README changed ---
+      - name: Check if README.md changed
+        id: check_diff
+        run: |
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      # --- Commit if changes exist ---
+      - name: Commit updated README
+        if: steps.check_diff.outputs.changed == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Automated update: README.md rebuilt"
+          branch: main
+          file_pattern: README.md
+
+      # --- Tag commit with timestamp ---
+      - name: Tag commit with timestamp
+        if: steps.check_diff.outputs.changed == 'true'
+        run: |
+          timestamp=$(date -u +"%Y%m%d-%H%M")
+          tag="readme-update-${timestamp}"
+          echo "Creating tag: ${tag}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git tag -a "${tag}" -m "Automated README update at ${timestamp} UTC"
+          git push origin "${tag}"
