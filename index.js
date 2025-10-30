@@ -15,7 +15,7 @@ let DATA = {
     hour: 'numeric',
     minute: 'numeric',
     timeZoneName: 'short',
-    timeZone: 'Europe/Stockholm',
+    timeZone: 'America/Los_Angeles',
   }),
 };/**
   * A - We open 'main.mustache'
